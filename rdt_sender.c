@@ -35,6 +35,8 @@ int dupACK = 0;
 int ssthresh = 64;
 int ack_buffer[1000];
 int dupACK_index = 0;
+int dupACKbreak = 0;
+int ackno= 0;
 //MSS_SIZE = 1500   
 
 
@@ -149,137 +151,144 @@ int main (int argc, char **argv)
        //------Put data into buffer X window_size------///
         for (int i = 0; i < window_size; i++)
         {
-        len = fread(buffer, 1, DATA_SIZE, fp);
-        if ( len <= 0)
-        {
-            VLOG(INFO, "End Of File has been reached");
-            sndpkt = make_packet(0);
-            sendto(sockfd, sndpkt, TCP_HDR_SIZE,  0,(const struct sockaddr *)&serveraddr, serverlen);
-            break;
-        }
-        //Send_base = 0
-        send_base = next_seqno;
-        //Next_seqno = 0 + num bytes in 1 packet
-        next_seqno = send_base + len;
-        //Make a packet with num_bytes
-        sndpkt = make_packet(len);
-        memcpy(sndpkt->data, buffer, len);
-        //Seq num = 0
-        sndpkt->hdr.seqno = send_base;
+            len = fread(buffer, 1, DATA_SIZE, fp);
+            if ( len <= 0)
+            {
+                VLOG(INFO, "End Of File has been reached");
+                sndpkt = make_packet(0);
+                sendto(sockfd, sndpkt, TCP_HDR_SIZE,  0,(const struct sockaddr *)&serveraddr, serverlen);
+                break;
+            }
+            //Send_base = 0
+            send_base = next_seqno;
+            //Next_seqno = 0 + num bytes in 1 packet
+            next_seqno = send_base + len;
+            //Make a packet with num_bytes
+            sndpkt = make_packet(len);
+            memcpy(sndpkt->data, buffer, len);
+            //Seq num = 0
+            sndpkt->hdr.seqno = send_base;
 
-        //Put packet into window_buffer
-        window_buffer[i] = sndpkt;
+            //Put packet into window_buffer
+            window_buffer[i] = sndpkt;
 
-       //------Send all packets in window---------
-      
-        //Send packet
-        if(sendto(sockfd, sndpkt, TCP_HDR_SIZE + get_data_size(sndpkt), 0, ( const struct sockaddr *)&serveraddr, serverlen) > 0)
-        {
-            VLOG(DEBUG, "Sent packet %d to %s", send_base, inet_ntoa(serveraddr.sin_addr));
-            
-        }
-        else
-        {
-            error("sendto");
-        }
+           //------Send all packets in window---------
+          
+            //Send packet
+            if(sendto(sockfd, sndpkt, TCP_HDR_SIZE + get_data_size(sndpkt), 0, ( const struct sockaddr *)&serveraddr, serverlen) > 0)
+            {
+                VLOG(DEBUG, "Sent packet %d to %s", send_base, inet_ntoa(serveraddr.sin_addr));
+                
+            }
+            else
+            {
+                error("sendto");
+            }
         }
 
         //Start timer for ACK
         start_timer();
-        //If timeout - resend function
 
         slowstart = 1;
        
     while(slowstart==1)
     { 
+        dupACKbreak = 0;
 
         //-------Wait for ACK to ACK last packet (Cumulative ACK) ------------
 
         //------- Receive ACKS-----------
 
-        //If recv ACK
-        for(int i = 0; i< window_size; i++){
-            if(recvfrom(sockfd, buffer, MSS_SIZE, 0,(struct sockaddr *) &serveraddr, (socklen_t *)&serverlen) > 0)
-            {
-                //-----Process ACK--------
-                recvpkt = (tcp_packet *)buffer;
-                printf("Received %d, ACK = %d \n", get_data_size(recvpkt),recvpkt->hdr.ackno);
-                assert(get_data_size(recvpkt) <= DATA_SIZE); //If FALSE, then error
-                //Put into ACK buffer then compare window-size - 1 with next seq no 
-                ack_buffer[i]=recvpkt->hdr.ackno;
-                stop_timer();
-
-                //Check for dup ACKsS - If last ACK is same as this ACK
-                if (ack_buffer[i-1] == ack_buffer[i])
+        //If recv ACK and there are not 3 dupACK
+            for(int i = 0; i< window_size; i++){
+                if(recvfrom(sockfd, buffer, MSS_SIZE, 0,(struct sockaddr *) &serveraddr, (socklen_t *)&serverlen) > 0)
                 {
-                    dupACK++;
-                    if (dupACK == 2)
-                    {   
-                        printf("3 DupACKs - need to retransmit\n");
-                        dupACK_index = i - 2;
-                        //TODO - Test if this break to for loop - Jump out of for loop
-                        dupACK = 0;
+                    //-----Process ACK--------
+                    recvpkt = (tcp_packet *)buffer;
+                    printf("Received %d, ACK = %d \n", get_data_size(recvpkt),recvpkt->hdr.ackno);
+                    assert(get_data_size(recvpkt) <= DATA_SIZE); //If FALSE, then error
+                    //Put into ACK buffer then compare window-size - 1 with next seq no 
+                    ack_buffer[i]=recvpkt->hdr.ackno;
+                    stop_timer();
+
+                    //Check for dup ACKs
+                    if (ack_buffer[i-1] == ack_buffer[i] && (ack_buffer[i-2] == ack_buffer[i]))
+                    {
+                        printf("3 DupACKs Detected: %d \n", ack_buffer[i]);
+                        //dupACK_index = i - 2;
+                        dupACKbreak = 1;
+                    }
+
+                    if (dupACKbreak == 1) {
                         break;
                     }
+
                 }
-
-
+               // If do not recv ACK
+                else 
+                {
+                    printf("Did not get ACK b/c timeout\n");
+                    error("recvfrom");
+                }
             }
-           // If do not recv ACK
-            else 
-            {
-                printf("Did not get ACK b/c timeout\n");
-                error("recvfrom");
-            }
-        }
 
-            //If ACK of LAST PACKET does not equal the next seq num
+
             // ----- Resend packet --------
-            if (ack_buffer[window_size - 1] != next_seqno)
+            if ( (ack_buffer[window_size - 1] != next_seqno) || (dupACKbreak == 1))
             {
-                //Set ssthresh 
-                if ( (window_size/2) > 2)
-                {
-                    ssthresh = (window_size/2);
-                }
-                else
-                {
-                    ssthresh = 2;
-                }
-        
                 printf("ACK = %d, Next_Seqno = %d \n",recvpkt->hdr.ackno, next_seqno);
+
+                //If timeout - resend()
                 
-                //TODO - Test if ACK_index works!
-                if (dupACK == 3)
+                //If 3 dup ACKs
+                if (dupACKbreak == 1)
                 {
+                    dupACKbreak = 0;
+
+                    printf("3 DupACKs: %d\n",recvpkt->hdr.ackno);
+
+                    // Set window to 1
                     window_size = 1;
+
+                    //Set ssthresh 
+                    if ( (window_size/2) > 2)
+                    {
+                        ssthresh = (window_size/2);
+                    }
+                    else
+                    {
+                        ssthresh = 2;
+                    }
+
+                    printf("Window_size = %d, SSthresh = %d\n", window_size, ssthresh);
+
                     //Resend packet
-                    if (sendto(sockfd, window_buffer[0], TCP_HDR_SIZE + get_data_size(sndpkt), 0,(const struct sockaddr *)&serveraddr, serverlen) < 0)
+                    if (sendto(sockfd, sndpkt, TCP_HDR_SIZE + get_data_size(sndpkt), 0,(const struct sockaddr *)&serveraddr, serverlen) > 0)
+                    {
+                        VLOG(DEBUG, "RESENDING: packet %d", sndpkt->hdr.seqno);
+                    }
+                    else 
                     {
                         error("sendto");
                     }
-                    VLOG(DEBUG, "RESENDING: packet %d to %s, Base: %d, ACK: %d", send_base, inet_ntoa(serveraddr.sin_addr), window_buffer[dupACK_index]->hdr.seqno, window_buffer[dupACK_index]->hdr.ackno);
+
+                    slowstart = 0;
                 }
 
-                //Resend packet
-                if (sendto(sockfd, window_buffer[0], TCP_HDR_SIZE + get_data_size(sndpkt), 0,(const struct sockaddr *)&serveraddr, serverlen) < 0)
-                {
-                    error("sendto");
-                }
-
-                VLOG(DEBUG, "RESENDING: packet %d to %s, Base: %d, ACK: %d", send_base, inet_ntoa(serveraddr.sin_addr), window_buffer[0]->hdr.seqno, window_buffer[0]->hdr.ackno);
             }
 
             //If ACK was correct and DOES equal next seq number
 
             if (recvpkt->hdr.ackno == next_seqno)
-            {
-                printf("ACK = next_seqno \n");
-                
+            { 
+
+                printf("Recieved ACK: %d, Next Seq_no: %d\n", recvpkt->hdr.ackno, next_seqno);
+
                 //Increase window_size
                 window_size++;
-                printf("window_size = %d\n", window_size);
+                printf("Window_size = %d\n", window_size);
 
+                //If reach sstrhesh -> enter congestion avoidance
                 if (window_size == ssthresh)
                 {
                     printf("Entering congestion avoidance\n");
@@ -296,7 +305,7 @@ int main (int argc, char **argv)
 
                 //next_seqno = window_buffer[0]->hdr.ackno;
 
-                printf("Recieved ACK: %d, Next Seq_no: %d\n", recvpkt->hdr.ackno, next_seqno);
+               
                 // update oldest unACKed byte
                 // send_base = 
                
