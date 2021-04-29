@@ -6,11 +6,89 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <signal.h>
 #include <sys/time.h>
+#include <time.h>
 #include <assert.h>
 
-#include "common.h"
 #include "packet.h"
+#include "common.h"
+
+#define STDIN_FD    0
+#define RETRY  120 //milli second 
+
+int next_seqno=0;
+int send_base=0;
+int window_size = 1;
+
+int sockfd, serverlen;
+struct sockaddr_in serveraddr;
+struct itimerval timer; 
+tcp_packet *sndpkt;
+tcp_packet *recvpkt;
+sigset_t sigmask;       
+tcp_packet *window_buffer[1000]; //What is this?
+int slowstart = 0;
+int eof_window_number = 0;     //What is this?
+int cong_avoid = 0;
+int dupACK = 0;
+int ssthresh = 64;
+int ack_buffer[1000];
+int dupACK_index = 0;
+//MSS_SIZE = 1500  
+
+int sockfd; /* socket */
+int portno; /* port to listen on */
+int clientlen; /* byte size of client's address */
+struct sockaddr_in serveraddr; /* server's addr */
+struct sockaddr_in clientaddr; /* client addr */
+int optval; /* flag value for setsockopt */
+FILE *fp;
+char buffer[MSS_SIZE];
+struct timeval tp; 
+
+void resend_packets(int sig)
+{
+    if (sig == SIGALRM)
+    {
+        VLOG(INFO, "Timeout happend. Resending packet...");
+        if (sendto(sockfd, sndpkt, TCP_HDR_SIZE, 0, (struct sockaddr *) &clientaddr, clientlen) < 0) {
+            error("ERROR in sendto");
+        }
+    }
+}
+
+
+void start_timer()
+{
+    sigprocmask(SIG_UNBLOCK, &sigmask, NULL);
+    setitimer(ITIMER_REAL, &timer, NULL);
+}
+
+
+void stop_timer()
+{
+    sigprocmask(SIG_BLOCK, &sigmask, NULL);
+}
+
+
+/*
+ * init_timer: Initialize timeer
+ * delay: delay in milli seconds
+ * sig_handler: signal handler function for resending unacknoledge packets
+ */
+void init_timer(int delay, void (*sig_handler)(int)) 
+{
+    signal(SIGALRM, resend_packets);
+    timer.it_interval.tv_sec = delay / 1000;    // sets an interval of the timer
+    timer.it_interval.tv_usec = (delay % 1000) * 1000;  
+    timer.it_value.tv_sec = delay / 1000;       // sets an initial value
+    timer.it_value.tv_usec = (delay % 1000) * 1000;
+
+    sigemptyset(&sigmask);
+    sigaddset(&sigmask, SIGALRM);
+}
+
 
 
 /*
@@ -23,15 +101,7 @@ tcp_packet *recvpkt;
 tcp_packet *sndpkt;
 
 int main(int argc, char **argv) {
-    int sockfd; /* socket */
-    int portno; /* port to listen on */
-    int clientlen; /* byte size of client's address */
-    struct sockaddr_in serveraddr; /* server's addr */
-    struct sockaddr_in clientaddr; /* client addr */
-    int optval; /* flag value for setsockopt */
-    FILE *fp;
-    char buffer[MSS_SIZE];
-    struct timeval tp;
+    
 
     /* 
      * check command line arguments 
@@ -84,14 +154,27 @@ int main(int argc, char **argv) {
     VLOG(DEBUG, "epoch time, bytes received, sequence number");
 
     clientlen = sizeof(clientaddr);
+
+    init_timer(RETRY, resend_packets);
+
+    int start = 0;
+
     while (1) {
+
+        //Timer for getting package from sender
         /*
          * recvfrom: receive a UDP datagram from a client
          */
+        if (start != 0) 
+        {
+            start_timer();
+        }
         //VLOG(DEBUG, "waiting from server \n");
-        if (recvfrom(sockfd, buffer, MSS_SIZE, 0,(struct sockaddr *) &clientaddr, (socklen_t *)&clientlen) < 0) {
+        if (recvfrom(sockfd, buffer, MSS_SIZE, 0,(struct sockaddr *) &clientaddr, (socklen_t *)&clientlen) < 0) 
+        {
             error("ERROR in recvfrom");
         }
+        start = 1;
         recvpkt = (tcp_packet *) buffer;
         assert(get_data_size(recvpkt) <= DATA_SIZE);
         if ( recvpkt->hdr.data_size == 0) {
@@ -113,6 +196,7 @@ int main(int argc, char **argv) {
         if (sendto(sockfd, sndpkt, TCP_HDR_SIZE, 0, (struct sockaddr *) &clientaddr, clientlen) < 0) {
             error("ERROR in sendto");
         }
+        stop_timer();
     }
 
     return 0;

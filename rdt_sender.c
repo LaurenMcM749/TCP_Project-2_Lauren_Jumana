@@ -186,7 +186,6 @@ int main (int argc, char **argv)
 
         //Start timer for ACK
         start_timer();
-
         //If timeout - resend function
 
         slowstart = 1;
@@ -216,9 +215,10 @@ int main (int argc, char **argv)
                     dupACK++;
                     if (dupACK == 2)
                     {   
-                        printf("3 DupACKs - need to retransmit");
+                        printf("3 DupACKs - need to retransmit\n");
                         dupACK_index = i - 2;
                         //TODO - Test if this break to for loop - Jump out of for loop
+                        dupACK = 0;
                         break;
                     }
                 }
@@ -296,7 +296,7 @@ int main (int argc, char **argv)
 
                 //next_seqno = window_buffer[0]->hdr.ackno;
 
-                printf("Recieved ACK: %d, Next Seq_no: %d\n, last_window: %d", recvpkt->hdr.ackno, next_seqno, eof_window_number);
+                printf("Recieved ACK: %d, Next Seq_no: %d\n", recvpkt->hdr.ackno, next_seqno);
                 // update oldest unACKed byte
                 // send_base = 
                
@@ -308,22 +308,17 @@ int main (int argc, char **argv)
 
                 //---- Send next packets-----
 
-                //slowstart = 0;
+
+                slowstart = 0;
 
             
 
             }
 
+
         }   
-        // //If do not recv ACK
-        // else 
-        // {
-        //     error("recvfrom");
-        // }
 
     }
-
-    // }
 
     return 0;
 
