@@ -1,0 +1,75 @@
+
+cwnd = 1
+ssthresh = 
+dupACKcount = 
+MSS = 
+
+start_window = X
+end_window = 
+= cwnd 
+To increase - end_windiw++
+fseeks(seqnum) - keeps track of which part of the file is in the window
+
+Questions:
+What is eof_window_number
+What is window_buffer
+
+
+//Initially-
+while packets < cwnd
+//Add packet
+//Send packet
+//Update cur index to end + 1 - update current to next window
+
+//Send first window
+
+//Then Start in Slow Start
+//As long as base window < end window (and waiting for ACK)
+while(SlowStart){
+    //Getting ACKs
+    if recv ACK:
+        if recvpkt->hdr.ackno == next_seqno:
+            //Stop and SEND NEW PACKET
+            update oldest unACKed byte
+            cwnd = cwnd + MSS
+            //
+        if dup ACK:
+            dupACK++;
+
+    //If experiences loss event
+
+    if timer timeout:
+        ssthresh = cwnd/2 
+        cwnd = 1
+    
+    if dupACK == 3:
+        //Retransmit
+        ssthresh = cwnd/2 //max(cwnd/2, 2)
+        cwnd = 1
+        
+    if cwnd == ssthresh:
+        //Congestion Avoidance
+        ssthresh = cwnd/2
+        SlowStart = False;
+        CongestionAvoidance = True
+}
+
+//Congestion Avoidance
+while (CongestionAvoidance){
+    
+    if recv ACK:
+        cwnd = cwnd + MSS X (MSS/cwnd)
+        if dupACK:
+            dupACK ++;
+    
+    if timer timeout:
+        cwnd = 1
+        ssthresh = cwnd/2
+    
+    if dupACK == 3:
+        Retransmit
+        cwnd = ssthresh + 3MSS
+        ssthresh = cwnd/2
+        SlowStart = 1
+
+}
