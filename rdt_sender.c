@@ -121,6 +121,7 @@ int main (int argc, char **argv)
     FILE *cwnd;
     time_t seconds;
 
+    cwnd = fopen("CWND.csv", "w");
     cwnd = fopen("CWND.csv", "a");
     if (cwnd == NULL) {
         printf("Failed to open cwnd\n");
@@ -177,7 +178,8 @@ int main (int argc, char **argv)
                 VLOG(INFO, "End Of File has been reached");
                 sndpkt = make_packet(0);
                 sendto(sockfd, sndpkt, TCP_HDR_SIZE,  0,(const struct sockaddr *)&serveraddr, serverlen);
-                break;
+                fclose(cwnd);
+                return 0;
             }
             //Send_base = 0
             send_base = next_seqno;
@@ -194,7 +196,7 @@ int main (int argc, char **argv)
 
             //Append window_size
             seconds = time(NULL);
-            fprintf(cwnd,"%d, %ld, %d\n", window_size, seconds,ssthresh);  
+            fprintf(cwnd,"%d, %ld, %d\n", window_size, seconds, ssthresh);  
 
            //------Send all packets in window---------
           
@@ -245,8 +247,11 @@ int main (int argc, char **argv)
                 {
                     if(recvfrom(sockfd, buffer, MSS_SIZE, 0,(struct sockaddr *) &serveraddr, (socklen_t *)&serverlen) > 0)
                     {
+                        //Append window_size
+                        seconds = time(NULL);
+                        fprintf(cwnd,"%d, %ld, %d\n", window_size, seconds, ssthresh);  
 
-                        //-----Process ACK--------
+                                    //-----Process ACK--------
                         recvpkt = (tcp_packet *)buffer;
                         printf("S - Received ACK = %d \n",recvpkt->hdr.ackno);                        
                         assert(get_data_size(recvpkt) <= DATA_SIZE); //If FALSE, then error
@@ -294,9 +299,14 @@ int main (int argc, char **argv)
                 {
                     //printf("S - NO: ACK = %d, Next_Seqno = %d \n",recvpkt->hdr.ackno, next_seqno);
 
+
                     //1) If timeout - resend()
+
+                    //Append window_size
+                    seconds = time(NULL);
+                    fprintf(cwnd,"%d, %ld, %d\n", window_size, seconds, ssthresh);  
                     
-                    //2) If 3 dup ACKs
+                    //2) If 3 dup ACKS
                     if (dupACKbreak == 1)
                     {
                         dupACKbreak = 0;
@@ -350,9 +360,19 @@ int main (int argc, char **argv)
 
                     printf("S - OK- ACK: %d, Next Seq_no: %d\n", recvpkt->hdr.ackno, next_seqno);
 
+                    //Append window_size
+                    seconds = time(NULL);
+                    fprintf(cwnd,"%d, %ld, %d\n", window_size, seconds, ssthresh);  
+                    
+
                     //Increase window_size
                     window_size++;
                     printf("Window_size = %d\n", window_size);
+
+                    //Append window_size
+                    seconds = time(NULL);
+                    fprintf(cwnd,"%d, %ld, %d\n", window_size, seconds, ssthresh);  
+                    
 
                    
                     if (freepkt == 1) 
@@ -387,6 +407,10 @@ int main (int argc, char **argv)
                 {
                     if(recvfrom(sockfd, buffer, MSS_SIZE, 0,(struct sockaddr *) &serveraddr, (socklen_t *)&serverlen) > 0)
                     {
+                        //Append window_size
+                        seconds = time(NULL);
+                        fprintf(cwnd,"%d, %ld, %d\n", window_size, seconds, ssthresh);  
+                    
                         //-----Process ACK--------
                         recvpkt = (tcp_packet *)buffer;
                         printf("CA - Received ACK = %d \n",recvpkt->hdr.ackno);                        
@@ -443,6 +467,11 @@ int main (int argc, char **argv)
                 if ((recvpkt->hdr.ackno != next_seqno) || (dupACKbreak == 1))
                 {
                     printf("CA: ACK = %d, Next_Seqno = %d \n",recvpkt->hdr.ackno, next_seqno);
+
+                    //Append window_size
+                    seconds = time(NULL);
+                    fprintf(cwnd,"%d, %ld, %d\n", window_size, seconds, ssthresh);  
+                    
 
                     //1) If timeout - resend()
                     
@@ -502,9 +531,19 @@ int main (int argc, char **argv)
 
                     printf("CA: OK- Recieved ACK: %d, Next Seq_no: %d\n", recvpkt->hdr.ackno, next_seqno);
 
+                    //Append window_size
+                    seconds = time(NULL);
+                    fprintf(cwnd,"%d, %ld, %d\n", window_size, seconds, ssthresh);  
+                    
+
                     //Increase window_size
                     window_size = window_size + (1/window_size);
                     printf("Window_size = %d\n", window_size);
+
+                    //Append window_size
+                    seconds = time(NULL);
+                    fprintf(cwnd,"%d, %ld, %d\n", window_size, seconds, ssthresh);  
+                    
 
                  
                     if (freepkt == 1) 
