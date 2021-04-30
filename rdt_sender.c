@@ -234,13 +234,13 @@ int main (int argc, char **argv)
 
 
             // ----- Resend packet --------
-            if ( (ack_buffer[window_size - 1] != next_seqno) || (dupACKbreak == 1))
+            if (recvpkt->hdr.ackno != next_seqno) || (dupACKbreak == 1))
             {
                 printf("ACK = %d, Next_Seqno = %d \n",recvpkt->hdr.ackno, next_seqno);
 
-                //If timeout - resend()
+                //1) If timeout - resend()
                 
-                //If 3 dup ACKs
+                //2) If 3 dup ACKs
                 if (dupACKbreak == 1)
                 {
                     dupACKbreak = 0;
@@ -278,11 +278,10 @@ int main (int argc, char **argv)
             }
 
             //If ACK was correct and DOES equal next seq number
-
             if (recvpkt->hdr.ackno == next_seqno)
             { 
 
-                printf("Recieved ACK: %d, Next Seq_no: %d\n", recvpkt->hdr.ackno, next_seqno);
+                printf("OK- Recieved ACK: %d, Next Seq_no: %d\n", recvpkt->hdr.ackno, next_seqno);
 
                 //Increase window_size
                 window_size++;
@@ -295,37 +294,136 @@ int main (int argc, char **argv)
                     cong_avoid = 1;
 
                 }
-
-                //Next seq number = seq number of the ACK
-                //window_buffer is tcp_packet
-                //tcp_packet has DATA and HEADER
-                //HEADER has 
-                //window_buffer is array of 10 TCP_PACKETS
-                //Next seq number is first packet's ACK
-
-                //next_seqno = window_buffer[0]->hdr.ackno;
-
-               
-                // update oldest unACKed byte
-                // send_base = 
                
                 free(sndpkt);
 
-                //TODO: Update window (Part 2)
-                //update_window(window_buffer, fp);
-                // window_size = window_size + DATA_SIZE
-
                 //---- Send next packets-----
-
 
                 slowstart = 0;
 
-            
+            }
 
+        }   
+
+    }
+
+    while (cong_avoid == 1)
+    {
+        dupACKbreak = 0;
+
+        //-------Wait for ACK to ACK last packet (Cumulative ACK) ------------
+
+        //------- Receive ACKS-----------
+
+        //If recv ACK and there are not 3 dupACK
+            for(int i = 0; i< window_size; i++){
+                if(recvfrom(sockfd, buffer, MSS_SIZE, 0,(struct sockaddr *) &serveraddr, (socklen_t *)&serverlen) > 0)
+                {
+                    //-----Process ACK--------
+                    recvpkt = (tcp_packet *)buffer;
+                    printf("Received %d, ACK = %d \n", get_data_size(recvpkt),recvpkt->hdr.ackno);
+                    assert(get_data_size(recvpkt) <= DATA_SIZE); //If FALSE, then error
+                    //Put into ACK buffer then compare window-size - 1 with next seq no 
+                    ack_buffer[i]=recvpkt->hdr.ackno;
+                    stop_timer();
+
+                    //Check for dup ACKs
+                    if (ack_buffer[i-1] == ack_buffer[i] && (ack_buffer[i-2] == ack_buffer[i]))
+                    {
+                        printf("3 DupACKs Detected: %d \n", ack_buffer[i]);
+                        //dupACK_index = i - 2;
+                        dupACKbreak = 1;
+                    }
+
+                    if (dupACKbreak == 1) {
+                        break;
+                    }
+
+                }
+               // If do not recv ACK
+                else 
+                {
+                    printf("Did not get ACK b/c timeout\n");
+                    error("recvfrom");
+                }
             }
 
 
+            // ----- Resend packet --------
+            if (recvpkt->hdr.ackno != next_seqno) || (dupACKbreak == 1))
+            {
+                printf("ACK = %d, Next_Seqno = %d \n",recvpkt->hdr.ackno, next_seqno);
+
+                //1) If timeout - resend()
+                
+                //2) If 3 dup ACKs
+                if (dupACKbreak == 1)
+                {
+                    dupACKbreak = 0;
+
+                    printf("3 DupACKs: %d\n",recvpkt->hdr.ackno);
+
+                    // Set window to ssthresh + 3MSS
+                    window_size = ssthresh + 3*(MSS_SIZE);
+
+                    //Set ssthresh 
+                    if ( (window_size/2) > 2)
+                    {
+                        ssthresh = (window_size/2);
+                    }
+                    else
+                    {
+                        ssthresh = 2;
+                    }
+
+                    printf("Window_size = %d, SSthresh = %d\n", window_size, ssthresh);
+
+                    //Resend packet
+                    if (sendto(sockfd, sndpkt, TCP_HDR_SIZE + get_data_size(sndpkt), 0,(const struct sockaddr *)&serveraddr, serverlen) > 0)
+                    {
+                        VLOG(DEBUG, "RESENDING: packet %d", sndpkt->hdr.seqno);
+                    }
+                    else 
+                    {
+                        error("sendto");
+                    }
+
+                    cong_avoid = 0;
+                    slowstart = 0;
+                }
+
+            }
+
+            //If ACK was correct and DOES equal next seq number
+            if (recvpkt->hdr.ackno == next_seqno)
+            { 
+
+                printf("OK- Recieved ACK: %d, Next Seq_no: %d\n", recvpkt->hdr.ackno, next_seqno);
+
+                //Increase window_size
+                window_size = window_size + (1/window_size);
+                printf("Window_size = %d\n", window_size);
+
+                //If reach sstrhesh -> enter congestion avoidance
+                if (window_size == ssthresh)
+                {
+                    printf("Entering congestion avoidance\n");
+                    cong_avoid = 1;
+
+                }
+               
+                free(sndpkt);
+
+                //---- Send next packets-----
+
+                cong_avoid = 0;
+                slowstart = 0;
+
+            }
+
         }   
+
+    }
 
     }
 
