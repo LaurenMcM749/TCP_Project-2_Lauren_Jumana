@@ -45,6 +45,8 @@ int ack;
 
 
 
+
+
 void resend_packets(int sig)
 {
     if (sig == SIGALRM)
@@ -116,6 +118,13 @@ int main (int argc, char **argv)
     char *hostname;
     char buffer[DATA_SIZE];
     FILE *fp;
+    FILE *cwnd;
+    time_t seconds;
+
+    cwnd = fopen("CWND.csv", "a");
+    if (cwnd == NULL) {
+        printf("Failed to open cwnd\n");
+    }
 
     /* check command line arguments */
     if (argc != 4) {
@@ -182,6 +191,10 @@ int main (int argc, char **argv)
 
             //Put packet into window_buffer
             window_buffer[i] = sndpkt;
+
+            //Append window_size
+            seconds = time(NULL);
+            fprintf(cwnd,"%d, %ld, %d\n", window_size, seconds,ssthresh);  
 
            //------Send all packets in window---------
           
@@ -266,7 +279,7 @@ int main (int argc, char **argv)
                         }
 
                     }
-                    
+
                    // If do not recv ACK
                     else 
                     {
@@ -513,6 +526,7 @@ int main (int argc, char **argv)
 
     // free(sndpkt);
     return 0; 
+    fclose(cwnd);
 
 } //main
 
