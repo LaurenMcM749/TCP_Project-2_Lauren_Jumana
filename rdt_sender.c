@@ -200,12 +200,21 @@ int main (int argc, char **argv)
         //Start timer for ACK
         start_timer();
 
+        //If still in slowstart, stay in slowstart
         if (cong_avoid == 0){
             slowstart = 1;
         }
 
+        //If still in cong_avoid, stay in cong_aboid
         if (slowstart == 0){
             cong_avoid = 1;
+        }
+
+        //If reach sstrhesh -> enter congestion avoidance
+        if (window_size == ssthresh)
+        {  
+            cong_avoid = 1;
+            slowstart = 0;
         }
 
         freepkt = 1;
@@ -251,22 +260,13 @@ int main (int argc, char **argv)
                             }
                         }
 
-
-                        // //Check for dup ACKs
-                        // if ((ack_buffer[ack_base + (i-1)] == ack_buffer[ack_base + i]) && (ack_buffer[ack_base + (i-2)] == ack_buffer[ack_base + i])) 
-                        // {
-                        //     printf("3 DupACKs Detected: %d \n", ack_buffer[ack_base + i]);
-                        //     //dupACK_index = i - 2;
-                        //     dupACKbreak = 1;
-                        // }
-
-
                         if (dupACKbreak == 1) 
                         {
                             break;
                         }
 
                     }
+                    
                    // If do not recv ACK
                     else 
                     {
@@ -341,20 +341,19 @@ int main (int argc, char **argv)
                     window_size++;
                     printf("Window_size = %d\n", window_size);
 
-                    //If reach sstrhesh -> enter congestion avoidance
-                    if (window_size == ssthresh)
-                    {  
-                        cong_avoid = 1;
-                    }
                    
                     if (freepkt == 1) 
                     {
                         free(sndpkt);
                         freepkt  = 0;
                     }
+
+
                     //---- Send next packets-----
 
+                    cong_avoid = 0;
                     slowstart = 0;
+
 
                 } 
 
@@ -442,8 +441,8 @@ int main (int argc, char **argv)
 
                         printf("3 DupACKs: %d\n",recvpkt->hdr.ackno);
 
-                        //Identify packet to send
-                        for(int x = 0; x < window_size+1; x++){
+                          //Identify packet to send
+                        for(int x = 0; x < window_size + 1; x++){
                             printf("CA: %d\n", window_buffer[x]->hdr.seqno);
                             if( (window_buffer[x]->hdr.seqno) == (recvpkt->hdr.ackno)){
                                 sndpkt = window_buffer[x];
@@ -463,8 +462,8 @@ int main (int argc, char **argv)
                         }
 
 
-                        // Set window to ssthresh + 3MSS (1 byte)
-                        window_size = ssthresh + (3*(1));
+                        // Set window to 1
+                        window_size = 1;
 
                         //Set ssthresh 
                         if ( (window_size/2) > 2)
@@ -479,7 +478,7 @@ int main (int argc, char **argv)
                         printf("Window_size = %d, SSthresh = %d\n", window_size, ssthresh);
 
                         cong_avoid = 0;
-                        slowstart = 0;
+                        slowstart = 1;
                     }
 
                 }
@@ -494,20 +493,13 @@ int main (int argc, char **argv)
                     window_size = window_size + (1/window_size);
                     printf("Window_size = %d\n", window_size);
 
-                    //If reach sstrhesh -> enter congestion avoidance
-                    if (window_size == ssthresh)
-                    {
-                        printf("Entering congestion avoidance\n");
-                        cong_avoid = 1;
-
-                    }
-                   
+                 
                     if (freepkt == 1) 
                     {
                         free(sndpkt);
                         freepkt = 0;
                     }
-
+                   
                     //---- Send next packets-----
 
                     cong_avoid = 0;
