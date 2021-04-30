@@ -41,6 +41,9 @@ int freepkt = 1;
 int dangerACK;
 int ack_base = -1;
 int ack;
+
+time_t rawtime;
+struct tm * timeinfo;
 //MSS_SIZE = 1500   
 
 
@@ -120,6 +123,10 @@ int main (int argc, char **argv)
     FILE *fp;
     FILE *cwnd;
     time_t seconds;
+    struct timeval begin, end;
+    long seconds1;
+    long microseconds;
+    double elapsed;
 
     cwnd = fopen("CWND.csv", "w");
     cwnd = fopen("CWND.csv", "a");
@@ -195,8 +202,12 @@ int main (int argc, char **argv)
             window_buffer[i] = sndpkt;
 
             //Append window_size
-            seconds = time(NULL);
-            fprintf(cwnd,"%d, %ld, %d\n", window_size, seconds, ssthresh);  
+            // Start measuring waiting time
+            gettimeofday(&begin, 0);
+            seconds1 = end.tv_sec - begin.tv_sec;
+            microseconds = end.tv_usec - begin.tv_usec;
+            elapsed = ((seconds1 + microseconds*1e-6) * -1);
+            fprintf(cwnd,"%d, %f, %d\n", window_size, elapsed, ssthresh);  
 
            //------Send all packets in window---------
           
@@ -247,11 +258,15 @@ int main (int argc, char **argv)
                 {
                     if(recvfrom(sockfd, buffer, MSS_SIZE, 0,(struct sockaddr *) &serveraddr, (socklen_t *)&serverlen) > 0)
                     {
-                        //Append window_size
-                        seconds = time(NULL);
-                        fprintf(cwnd,"%d, %ld, %d\n", window_size, seconds, ssthresh);  
+                         //Append window_size
+                        // Start measuring waiting time
+                        gettimeofday(&begin, 0);
+                        seconds1 = end.tv_sec - begin.tv_sec;
+                        microseconds = end.tv_usec - begin.tv_usec;
+                        elapsed = ((seconds1 + microseconds*1e-6) * -1);
+                        fprintf(cwnd,"%d, %f, %d\n", window_size, elapsed, ssthresh);  
 
-                                    //-----Process ACK--------
+                        //-----Process ACK--------
                         recvpkt = (tcp_packet *)buffer;
                         printf("S - Received ACK = %d \n",recvpkt->hdr.ackno);                        
                         assert(get_data_size(recvpkt) <= DATA_SIZE); //If FALSE, then error
@@ -303,8 +318,12 @@ int main (int argc, char **argv)
                     //1) If timeout - resend()
 
                     //Append window_size
-                    seconds = time(NULL);
-                    fprintf(cwnd,"%d, %ld, %d\n", window_size, seconds, ssthresh);  
+                    // Start measuring waiting time
+                    gettimeofday(&begin, 0);
+                    seconds1 = end.tv_sec - begin.tv_sec;
+                    microseconds = end.tv_usec - begin.tv_usec;
+                    elapsed = ((seconds1 + microseconds*1e-6) * -1);
+                    fprintf(cwnd,"%d, %f, %d\n", window_size, elapsed, ssthresh);    
                     
                     //2) If 3 dup ACKS
                     if (dupACKbreak == 1)
@@ -361,8 +380,12 @@ int main (int argc, char **argv)
                     printf("S - OK- ACK: %d, Next Seq_no: %d\n", recvpkt->hdr.ackno, next_seqno);
 
                     //Append window_size
-                    seconds = time(NULL);
-                    fprintf(cwnd,"%d, %ld, %d\n", window_size, seconds, ssthresh);  
+                    // Start measuring waiting time
+                    gettimeofday(&begin, 0);
+                    seconds1 = end.tv_sec - begin.tv_sec;
+                    microseconds = end.tv_usec - begin.tv_usec;
+                    elapsed = ((seconds1 + microseconds*1e-6) * -1);
+                    fprintf(cwnd,"%d, %f, %d\n", window_size, elapsed, ssthresh);    
                     
 
                     //Increase window_size
@@ -370,8 +393,13 @@ int main (int argc, char **argv)
                     printf("Window_size = %d\n", window_size);
 
                     //Append window_size
-                    seconds = time(NULL);
-                    fprintf(cwnd,"%d, %ld, %d\n", window_size, seconds, ssthresh);  
+                    // Start measuring waiting time
+                    gettimeofday(&begin, 0);
+                    seconds1 = end.tv_sec - begin.tv_sec;
+                    microseconds = end.tv_usec - begin.tv_usec;
+                    elapsed = ((seconds1 + microseconds*1e-6) * -1);
+                    fprintf(cwnd,"%d, %f, %d\n", window_size, elapsed, ssthresh);    
+                    
                     
 
                    
@@ -407,9 +435,14 @@ int main (int argc, char **argv)
                 {
                     if(recvfrom(sockfd, buffer, MSS_SIZE, 0,(struct sockaddr *) &serveraddr, (socklen_t *)&serverlen) > 0)
                     {
-                        //Append window_size
-                        seconds = time(NULL);
-                        fprintf(cwnd,"%d, %ld, %d\n", window_size, seconds, ssthresh);  
+                    //Append window_size
+                    // Start measuring waiting time
+                    gettimeofday(&begin, 0);
+                    seconds1 = end.tv_sec - begin.tv_sec;
+                    microseconds = end.tv_usec - begin.tv_usec;
+                    elapsed = ((seconds1 + microseconds*1e-6) * -1);
+                    fprintf(cwnd,"%d, %f, %d\n", window_size, elapsed, ssthresh);    
+                     
                     
                         //-----Process ACK--------
                         recvpkt = (tcp_packet *)buffer;
@@ -437,15 +470,6 @@ int main (int argc, char **argv)
                             }
                         }
 
-
-                        // //Check for dup ACKs
-                        // if ((ack_buffer[ack_base + (i-1)] == ack_buffer[ack_base + i]) && (ack_buffer[ack_base + (i-2)] == ack_buffer[ack_base + i])) 
-                        // {
-                        //     printf("3 DupACKs Detected: %d \n", ack_buffer[ack_base + i]);
-                        //     //dupACK_index = i - 2;
-                        //     dupACKbreak = 1;
-                        // }
-
                         ack_base++;
 
                         if (dupACKbreak == 1) 
@@ -469,8 +493,12 @@ int main (int argc, char **argv)
                     printf("CA: ACK = %d, Next_Seqno = %d \n",recvpkt->hdr.ackno, next_seqno);
 
                     //Append window_size
-                    seconds = time(NULL);
-                    fprintf(cwnd,"%d, %ld, %d\n", window_size, seconds, ssthresh);  
+                    // Start measuring waiting time
+                    gettimeofday(&begin, 0);
+                    seconds1 = end.tv_sec - begin.tv_sec;
+                    microseconds = end.tv_usec - begin.tv_usec;
+                    elapsed = ((seconds1 + microseconds*1e-6) * -1);
+                    fprintf(cwnd,"%d, %f, %d\n", window_size, elapsed, ssthresh);    
                     
 
                     //1) If timeout - resend()
@@ -532,10 +560,14 @@ int main (int argc, char **argv)
                     printf("CA: OK- Recieved ACK: %d, Next Seq_no: %d\n", recvpkt->hdr.ackno, next_seqno);
 
                     //Append window_size
-                    seconds = time(NULL);
-                    fprintf(cwnd,"%d, %ld, %d\n", window_size, seconds, ssthresh);  
+                    // Start measuring waiting time
+                    gettimeofday(&begin, 0);
+                    seconds1 = end.tv_sec - begin.tv_sec;
+                    microseconds = end.tv_usec - begin.tv_usec;
+                    elapsed = ((seconds1 + microseconds*1e-6) * -1);
+                    fprintf(cwnd,"%d, %f, %d\n", window_size, elapsed, ssthresh);    
+                      
                     
-
                     //Increase window_size
                     window_size = window_size + (1/window_size);
                     printf("Window_size = %d\n", window_size);
